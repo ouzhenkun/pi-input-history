@@ -1,19 +1,25 @@
 /**
- * Persistent History + Ctrl+R Reverse Search
+ * Persistent History + Reverse Search
  *
  * - Loads recent prompts from previous sessions into up/down history on startup.
- * - Ctrl+R opens a reverse search overlay (fuzzy subsequence matching).
+ * - Configurable reverse search overlay (fuzzy subsequence matching).
  *
- * Hotkeys while searching:
- * - Ctrl+R / ↑ : older match
- * - Ctrl+S / ↓ : newer match
- * - Enter      : accept match (fills editor)
- * - Esc/Ctrl+G : cancel
+ * Config: ~/.pi/agent/pi-input-history.json
+ *   { "searchShortcut": "ctrl+r", "newerShortcut": "ctrl+s" }
+ *
+ * Hotkeys while searching (defaults):
+ * - searchShortcut / ↑ : older match
+ * - newerShortcut / ↓  : newer match
+ * - Enter              : accept match (fills editor)
+ * - Esc/Ctrl+G         : cancel
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   CustomEditor,
   SessionManager,
+  getAgentDir,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import type { UserMessage } from "@earendil-works/pi-ai";
@@ -24,14 +30,51 @@ import {
   truncateToWidth,
   type Component,
   type Focusable,
+  type KeyId,
   type TUI,
 } from "@earendil-works/pi-tui";
 
 const MAX_MESSAGES = 100;
+const DEFAULT_SEARCH_SHORTCUT: KeyId = "ctrl+r";
+const DEFAULT_NEWER_SHORTCUT: KeyId = "ctrl+s";
+
+type Config = {
+  searchShortcut: KeyId;
+  newerShortcut: KeyId;
+};
+
+function normalizeKey(value: unknown, fallback: KeyId): KeyId {
+  if (typeof value !== "string") return fallback;
+  const s = value.trim().toLowerCase();
+  return s.length > 0 ? (s as KeyId) : fallback;
+}
+
+function loadConfig(): Config {
+  try {
+    const path = join(getAgentDir(), "pi-input-history.json");
+    if (!existsSync(path)) {
+      return {
+        searchShortcut: DEFAULT_SEARCH_SHORTCUT,
+        newerShortcut: DEFAULT_NEWER_SHORTCUT,
+      };
+    }
+    const raw = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+    return {
+      searchShortcut: normalizeKey(raw.searchShortcut, DEFAULT_SEARCH_SHORTCUT),
+      newerShortcut: normalizeKey(raw.newerShortcut, DEFAULT_NEWER_SHORTCUT),
+    };
+  } catch {
+    return {
+      searchShortcut: DEFAULT_SEARCH_SHORTCUT,
+      newerShortcut: DEFAULT_NEWER_SHORTCUT,
+    };
+  }
+}
 
 // ─── Extension Entry ───────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
+  const config = loadConfig();
   let historyCache: string[] = [];
 
   pi.on("session_start", async (_event, ctx) => {
@@ -53,11 +96,9 @@ export default function (pi: ExtensionAPI) {
     });
   });
 
-  // Ctrl+R: reverse search
-  pi.registerShortcut("ctrl+r", {
+  pi.registerShortcut(config.searchShortcut, {
     description: "Reverse search through prompt history",
     handler: async (ctx) => {
-      // Merge cached history with current session's branch history
       const branchHistory = collectBranchHistory(ctx);
       const merged = mergeHistory(branchHistory, historyCache);
 
@@ -67,7 +108,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       const selected = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-        return new ReverseSearchComponent(tui, theme, merged, done);
+        return new ReverseSearchComponent(tui, theme, merged, done, config);
       }, { overlay: true, overlayOptions: { anchor: "bottom-center", width: "100%" } });
 
       if (selected === null) return;
@@ -104,14 +145,11 @@ function toSingleLinePreview(text: string): string {
 
 /** Highlight matched characters (subsequence) with underline + accent color. */
 function highlightMatch(text: string, query: string, theme: any, maxWidth: number): string {
-  // Truncate plain text first to ensure it fits
   const truncated = truncateToWidth(text, maxWidth);
-  // Strip any ANSI that truncateToWidth might have added for ellipsis
   const plain = truncated.replace(/\x1b\[[0-9;]*m/g, "");
 
   if (!query) return theme.fg("text", plain);
 
-  // Find positions of subsequence-matched characters
   const lower = plain.toLowerCase();
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
   const matchPositions = new Set<number>();
@@ -127,19 +165,15 @@ function highlightMatch(text: string, query: string, theme: any, maxWidth: numbe
     }
   }
 
-  // Build styled string — group consecutive chars to reduce ANSI overhead
   let result = "";
   let i = 0;
   while (i < plain.length) {
     if (matchPositions.has(i)) {
-      // Collect consecutive matched chars
       let j = i;
       while (j < plain.length && matchPositions.has(j)) j++;
-      // Accent color + underline
       result += `\x1b[4m${theme.fg("accent", plain.slice(i, j))}\x1b[24m`;
       i = j;
     } else {
-      // Collect consecutive non-matched chars
       let j = i;
       while (j < plain.length && !matchPositions.has(j)) j++;
       result += theme.fg("text", plain.slice(i, j));
@@ -162,6 +196,7 @@ class ReverseSearchComponent implements Component, Focusable {
     private readonly theme: any,
     private readonly history: string[],
     private readonly done: Done,
+    private readonly config: Config,
   ) {
     this.input.onEscape = () => this.done(null);
     this.input.onSubmit = () => {
@@ -211,13 +246,13 @@ class ReverseSearchComponent implements Component, Focusable {
   }
 
   handleInput(data: string): void {
-    if (matchesKey(data, Key.ctrl("r")) || matchesKey(data, Key.up)) {
+    if (matchesKey(data, this.config.searchShortcut) || matchesKey(data, Key.up)) {
       this.cycleOlder();
       this.tui.requestRender();
       return;
     }
 
-    if (matchesKey(data, Key.ctrl("s")) || matchesKey(data, Key.down)) {
+    if (matchesKey(data, this.config.newerShortcut) || matchesKey(data, Key.down)) {
       this.cycleNewer();
       this.tui.requestRender();
       return;
@@ -244,9 +279,8 @@ class ReverseSearchComponent implements Component, Focusable {
     const t = this.theme;
     const currentMatch = this.getCurrentMatch();
 
-    // Reserve space for prefix and counter (use fixed max counter width)
     const prefix = "(reverse-search) ";
-    const maxCounterWidth = 10; // " [xx/xx]" is enough
+    const maxCounterWidth = 10;
     const availableWidth = Math.max(10, width - prefix.length - maxCounterWidth);
 
     const counterText = this.matchIndices.length > 0
@@ -265,7 +299,13 @@ class ReverseSearchComponent implements Component, Focusable {
       counter;
 
     const inputLine = truncateToWidth(this.input.render(width)[0] ?? "", width);
-    const help = truncateToWidth(t.fg("dim", "ctrl+r/↑ older • ctrl+s/↓ newer • enter accept • esc cancel"), width);
+    const help = truncateToWidth(
+      t.fg(
+        "dim",
+        `${this.config.searchShortcut}/↑ older • ${this.config.newerShortcut}/↓ newer • enter accept • esc cancel`,
+      ),
+      width,
+    );
 
     return [truncateToWidth(header, width), inputLine, help];
   }
@@ -350,7 +390,6 @@ function extractUserMessages(sessionPath: string): string[] {
       const text = extractText(entry.message.content);
       if (text) messages.push(text);
     }
-    // Reverse so newest messages come first within each session
     return messages.reverse();
   } catch {
     return [];
