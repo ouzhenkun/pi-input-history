@@ -33,17 +33,20 @@ On session start, your last 100 prompts across all sessions are loaded into the 
 
 1. Press the search shortcut (default **Ctrl+R**) to open the search overlay.
 2. Type to fuzzy-filter history (subsequence matching, space-separated multi-token).
-3. Matched characters are highlighted with your theme's accent color.
-4. Navigate and accept:
+3. Matched characters are highlighted with your theme's accent color, using **minimal-span** matching so the highlight stays on the closest contiguous group (e.g. `in` highlights `in` in `input`, not `pi`'s `i` + `input`'s `n`).
+4. The preview viewport shows the matched record; long lines are **soft-wrapped** (never truncated) and the viewport grows with content up to your terminal's height, then scrolls.
+5. The first matched line is marked with `▸`; the viewport is separated from the input line by a dim divider.
+6. Navigate and accept:
 
 | Key | Action |
 | --- | --- |
 | search shortcut / `↑` | Cycle to older match |
 | newer shortcut / `↓` | Cycle to newer match |
+| `ctrl+k` / `ctrl+j` | Scroll the preview viewport (when it exceeds the terminal height) |
 | `Enter` | Accept match into editor |
 | `Esc` / `Ctrl+G` | Cancel |
 
-Defaults: search = `ctrl+r`, newer = `ctrl+s`.
+Defaults: search = `ctrl+r`, newer = `ctrl+s`, scroll up = `ctrl+k`, scroll down = `ctrl+j`.
 
 ## Configuration
 
@@ -52,7 +55,9 @@ Optional config at `~/.pi/agent/pi-input-history.json`:
 ```json
 {
   "searchShortcut": "ctrl+r",
-  "newerShortcut": "ctrl+s"
+  "newerShortcut": "ctrl+s",
+  "scrollUpShortcut": "ctrl+k",
+  "scrollDownShortcut": "ctrl+j"
 }
 ```
 
@@ -60,6 +65,8 @@ Optional config at `~/.pi/agent/pi-input-history.json`:
 | --- | --- | --- |
 | `searchShortcut` | `ctrl+r` | Open reverse search; press again in the overlay to cycle older |
 | `newerShortcut` | `ctrl+s` | In the overlay, cycle to a newer match |
+| `scrollUpShortcut` | `ctrl+k` | In the overlay, scroll the preview viewport up |
+| `scrollDownShortcut` | `ctrl+j` | In the overlay, scroll the preview viewport down |
 
 Omit the file or any field to keep the default. After editing, run `/reload` in pi.
 
@@ -81,7 +88,11 @@ Or change `searchShortcut` in `pi-input-history.json` to another chord.
 
 - **Cross-session persistence** — history survives across sessions automatically.
 - **Fuzzy subsequence matching** — type partial characters in order, multi-token support with spaces.
-- **Character-level highlighting** — matched positions shown with accent color underline.
+- **Minimal-span highlighting** — matched characters form the closest contiguous group, so `in` highlights `input`, not scattered chars.
+- **Soft-wrapped preview** — long lines wrap to multiple lines instead of being truncated with `...`.
+- **Adaptive viewport height** — the preview grows with content up to the terminal height, then scrolls.
+- **Scrollable viewport** — `ctrl+k` / `ctrl+j` to browse the whole record.
+- **Match markers** — the first matched line is marked with `▸`, separated by a dim divider.
 - **Deduplication** — no duplicate entries across sessions.
 - **Current session awareness** — merges live branch history with cached cross-session history.
 - **Configurable shortcuts** — override via `pi-input-history.json`.
