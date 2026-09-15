@@ -100,7 +100,7 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       const editor =
         prevComponentFactory?.(tui, theme, keybindings) ??
-        new CustomEditor(tui, theme, keybindings);
+        new CustomEditor(tui, theme, keybindings, { embedWorkingStatus: true });
 
       for (let i = items.length - 1; i >= 0; i--) {
         editor.addToHistory?.(items[i]!);
