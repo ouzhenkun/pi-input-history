@@ -120,12 +120,17 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      let overlayTui: TUI | undefined;
       const selected = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
+        overlayTui = tui;
         return new ReverseSearchComponent(tui, theme, merged, done, config);
       }, { overlay: true, overlayOptions: { anchor: "bottom-center", width: "100%" } });
 
       if (selected === null) return;
       ctx.ui.setEditorText(selected);
+      // setEditorText does not repaint, and the render triggered by hiding the overlay
+      // runs before this continuation (nextTick queue drains before promise microtasks).
+      overlayTui?.requestRender();
     },
   });
 }
