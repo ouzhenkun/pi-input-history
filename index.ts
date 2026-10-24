@@ -30,6 +30,7 @@ import {
   truncateToWidth,
   visibleWidth,
   type Component,
+  type EditorComponent,
   type Focusable,
   type KeyId,
   type TUI,
@@ -91,22 +92,27 @@ export default function (pi: ExtensionAPI) {
   let historyCache: string[] = [];
 
   pi.on("session_start", async (_event, ctx) => {
-    const items = await loadRecentPrompts(ctx.cwd, MAX_MESSAGES);
-    historyCache = items;
+    let currentEditor: EditorComponent | undefined;
+    const seedHistory = (editor: EditorComponent) => {
+      for (let i = historyCache.length - 1; i >= 0; i--) {
+        editor.addToHistory?.(historyCache[i]!);
+      }
+    };
 
-    if (items.length === 0) return;
-
+    // Install before awaiting history IO. Calling setEditorComponent after the
+    // load would dismiss a selector (e.g. /model) opened while it was pending.
     const prevComponentFactory = ctx.ui.getEditorComponent();
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       const editor =
         prevComponentFactory?.(tui, theme, keybindings) ??
         new CustomEditor(tui, theme, keybindings, { embedWorkingStatus: true });
-
-      for (let i = items.length - 1; i >= 0; i--) {
-        editor.addToHistory?.(items[i]!);
-      }
+      currentEditor = editor;
+      seedHistory(editor);
       return editor;
     });
+
+    historyCache = await loadRecentPrompts(ctx.cwd, MAX_MESSAGES);
+    if (currentEditor) seedHistory(currentEditor);
   });
 
   pi.registerShortcut(config.searchShortcut, {

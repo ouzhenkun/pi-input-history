@@ -97,6 +97,19 @@ Or change `searchShortcut` in `pi-input-history.json` to another chord.
 - **Current session awareness** — merges live branch history with cached cross-session history.
 - **Configurable shortcuts** — override via `pi-input-history.json`.
 
+## Development
+
+With Node.js 22.19+ (the Pi runtime requirement):
+
+```bash
+npm install --ignore-scripts --no-package-lock
+npm test
+```
+
+The startup tests use Node's experimental TypeScript transformation and module
+mocking to defer history loading and verify that it does not dismiss an active
+selector or replace the editor after loading. No provider requests are made.
+
 ## Acknowledgments
 
 The reverse search component is inspired by [pi-readline-search](https://github.com/mrshu/pi-readline-search) by [@mrshu](https://github.com/mrshu).
