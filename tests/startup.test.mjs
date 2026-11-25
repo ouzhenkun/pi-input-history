@@ -137,6 +137,19 @@ test("preserve another extension's editor factory and seed later instances", asy
   assert.deepEqual(nextEditor.history, EXPECTED_HISTORY);
 });
 
+test("seed a reused editor instance only once", async () => {
+  const customEditor = new Editor();
+  const f = fixture(() => customEditor);
+  const loading = f.start();
+  f.finish();
+  await loading;
+  assert.deepEqual(customEditor.history, EXPECTED_HISTORY);
+
+  const reusedEditor = f.state.factory({}, {}, {});
+  assert.equal(reusedEditor, customEditor);
+  assert.deepEqual(reusedEditor.history, EXPECTED_HISTORY);
+});
+
 for (const outcome of ["empty", "failed"]) {
   test(`${outcome} history leaves an open selector and the editor unchanged`, async () => {
     const f = fixture();

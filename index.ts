@@ -93,10 +93,13 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     let currentEditor: EditorComponent | undefined;
+    const seededEditors = new WeakSet<EditorComponent>();
     const seedHistory = (editor: EditorComponent) => {
+      if (historyCache.length === 0 || seededEditors.has(editor)) return;
       for (let i = historyCache.length - 1; i >= 0; i--) {
         editor.addToHistory?.(historyCache[i]!);
       }
+      seededEditors.add(editor);
     };
 
     // Install before awaiting history IO. Calling setEditorComponent after the
