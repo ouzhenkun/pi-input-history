@@ -12,6 +12,9 @@
     "prompt-history",
     "fuzzy-search"
   ],
+  "scripts": {
+    "test": "node --experimental-transform-types --experimental-test-module-mocks --test tests/*.test.mjs"
+  },
   "license": "MIT",
   "author": "ouzhenkun",
   "repository": {
